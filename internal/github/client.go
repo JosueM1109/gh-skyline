@@ -67,6 +67,21 @@ func (c *Client) FetchContributions(username string, year int) (*types.Contribut
 	startDate := fmt.Sprintf("%d-01-01T00:00:00Z", year)
 	endDate := fmt.Sprintf("%d-12-31T23:59:59Z", year)
 
+	return c.fetchContributionsRange(username, startDate, endDate)
+}
+
+// FetchContributionsBetween retrieves the contribution data for a given username between two dates.
+// GitHub limits the span to one year, which matches the "in the last year" profile graph.
+func (c *Client) FetchContributionsBetween(username string, from, to time.Time) (*types.ContributionsResponse, error) {
+	if username == "" {
+		return nil, errors.New(errors.ValidationError, "username cannot be empty", nil)
+	}
+
+	return c.fetchContributionsRange(username, from.UTC().Format(time.RFC3339), to.UTC().Format(time.RFC3339))
+}
+
+// fetchContributionsRange runs the contribution calendar query for an RFC 3339 date range.
+func (c *Client) fetchContributionsRange(username, startDate, endDate string) (*types.ContributionsResponse, error) {
 	// GraphQL query to fetch the user's contributions within the specified date range.
 	query := `
     query ContributionGraph($username: String!, $from: DateTime!, $to: DateTime!) {

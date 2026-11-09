@@ -90,6 +90,51 @@ func GenerateSkyline(startYear, endYear int, targetUser string, full bool, outpu
 	return nil
 }
 
+// GenerateSkylineLastYear creates a single-row model of the rolling last year of contributions,
+// the same window as the "contributions in the last year" graph on a GitHub profile.
+func GenerateSkylineLastYear(targetUser string, output string, artOnly bool, multiPart bool) error {
+	client, err := github.InitializeGitHubClient()
+	if err != nil {
+		return errors.New(errors.NetworkError, "failed to initialize GitHub client", err)
+	}
+
+	if targetUser == "" {
+		username, err := client.GetAuthenticatedUser()
+		if err != nil {
+			return errors.New(errors.NetworkError, "failed to get authenticated user", err)
+		}
+		targetUser = username
+	}
+
+	to := time.Now().UTC()
+	from := to.AddDate(-1, 0, 0)
+	response, err := client.FetchContributionsBetween(targetUser, from, to)
+	if err != nil {
+		return fmt.Errorf("failed to fetch contributions: %w", err)
+	}
+	contributions := [][][]types.ContributionDay{contributionGrid(response)}
+
+	asciiArt, err := ascii.GenerateASCII(contributions[0], targetUser, to.Year(), !artOnly, !artOnly)
+	if err != nil {
+		if warnErr := logger.GetLogger().Warning("Failed to generate ASCII preview: %v", err); warnErr != nil {
+			return warnErr
+		}
+	} else {
+		fmt.Println(asciiArt)
+	}
+
+	if artOnly {
+		return nil
+	}
+
+	outputPath := utils.GenerateOutputFilename(targetUser, from.Year(), to.Year(), output)
+	if multiPart {
+		_, err := stl.GenerateMultiPartSTL(contributions, outputPath, targetUser, from.Year(), to.Year())
+		return err
+	}
+	return stl.GenerateSTLRange(contributions, outputPath, targetUser, from.Year(), to.Year())
+}
+
 // fetchContributionData retrieves and formats the contribution data for the specified year.
 func fetchContributionData(client *github.Client, username string, year int) ([][]types.ContributionDay, error) {
 	response, err := client.FetchContributions(username, year)
@@ -97,12 +142,16 @@ func fetchContributionData(client *github.Client, username string, year int) ([]
 		return nil, fmt.Errorf("failed to fetch contributions: %w", err)
 	}
 
-	// Convert weeks data to 2D array for STL generation
+	return contributionGrid(response), nil
+}
+
+// contributionGrid converts the weeks data to a 2D array for STL generation.
+func contributionGrid(response *types.ContributionsResponse) [][]types.ContributionDay {
 	weeks := response.User.ContributionsCollection.ContributionCalendar.Weeks
-	contributionGrid := make([][]types.ContributionDay, len(weeks))
+	grid := make([][]types.ContributionDay, len(weeks))
 	for i, week := range weeks {
-		contributionGrid[i] = week.ContributionDays
+		grid[i] = week.ContributionDays
 	}
 
-	return contributionGrid, nil
+	return grid
 }

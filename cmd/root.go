@@ -26,6 +26,7 @@ var (
 	web       bool
 	artOnly   bool
 	multiPart bool
+	lastYear  bool
 	output    string // new output path flag
 )
 
@@ -75,6 +76,7 @@ func initFlags() {
 	flags.BoolVarP(&web, "web", "w", false, "Open GitHub profile (authenticated or specified user).")
 	flags.BoolVarP(&artOnly, "art-only", "a", false, "Generate only ASCII preview")
 	flags.StringVarP(&output, "output", "o", "", "Output file path (optional)")
+	flags.BoolVarP(&lastYear, "last-year", "l", false, "Generate the rolling last year, like the profile graph (single row)")
 	flags.BoolVar(&multiPart, "multi-part", false, "Write the base, text, and skyline as separate STL files for multi-color printing")
 }
 
@@ -99,6 +101,10 @@ func handleSkylineCommand(_ *cobra.Command, _ []string) error {
 			return err
 		}
 		return nil
+	}
+
+	if lastYear {
+		return skyline.GenerateSkylineLastYear(user, output, artOnly, multiPart)
 	}
 
 	startYear, endYear, err := utils.ParseYearRange(yearRange)
